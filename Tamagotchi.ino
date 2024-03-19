@@ -161,15 +161,13 @@ void loop() {
     if (menuOpened) {
       menuSel = (menuSel + 1) % 6;  // Cycle through menu options if the menu is opened
     }
-    while (!digitalRead(BUTTON_A))
-      ;  // Wait for button release
+    while (!digitalRead(BUTTON_A));  // Wait for button release
   }
 
   if (!digitalRead(BUTTON_B)) {
     playButtonSound();
     handleMenuSelection(menuSel);
-    while (!digitalRead(BUTTON_B))
-      ;  // Wait for button release
+    while (!digitalRead(BUTTON_B));  // Wait for button release
   }
 
   if (!digitalRead(BUTTON_C)) {
@@ -179,8 +177,7 @@ void loop() {
     } else {
       menuOpened = !menuOpened;
     }
-    while (!digitalRead(BUTTON_C))
-      ;  // Wait for button release
+    while (!digitalRead(BUTTON_C));  // Wait for button release
   }
 
   if (!displayingStats) {
