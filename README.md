@@ -1,0 +1,2 @@
+# Tamagotchi
+Arduino Tamagotchi clone
