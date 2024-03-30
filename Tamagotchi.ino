@@ -2,34 +2,55 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <EEPROM.h>
 
 
 #define OLED_RESET -1  // Share Reset pin with Arduino
-Adafruit_SSD1306 display(128, 64, &Wire, OLED_RESET);
 
 #define BUTTON_A 9
 #define BUTTON_B 8
 #define BUTTON_C 7
 #define SOUND_PIN 6
 
-int tamagotchiPosX = 64;        // Start at the middle horizontally
-int tamagotchiPosY = 32;        // Start below the menu line vertically
+Adafruit_SSD1306 display(128, 64, &Wire, OLED_RESET);
+
+struct GameState {
+  int version; // Add a version number to the game state
+ int tamagotchiPosX;
+  int tamagotchiPosY;
+  int hunger;
+  int happy;
+  int health;
+  int sleep;
+  int discipline;
+  int poops;
+  // Constructor to initialize default values
+  GameState() : version(1), tamagotchiPosX(64), tamagotchiPosY(32),
+    hunger(50), happy(50), sleep(50),health(100),discipline(50), poops(0) {}
+};
+
+void saveGameState(const GameState& state) {
+  EEPROM.put(0, state); // Write the state to EEPROM starting at address 0
+}
+
+void loadGameState(GameState& state) {
+  EEPROM.get(0, state); // Read the state from EEPROM starting at address 0
+  if (state.version != 1) { 
+    state = GameState(); // Reset to default values
+  }
+}
+
 int moveDirectionX = 1;         // Movement direction: 1 for right, -1 for left
 int moveDirectionY = 1;         // Movement direction: 1 for down, -1 for up
 const int moveSpeed = 1;        // Adjust for faster or slower movement
 const int menuLineHeight = 16;  // Height of the menu line area
 
-// Tamagotchi stats
-int hunger = 50;
-int happy = 50;
-int health = 100;
-int sleep = 100;
-int discipline = 100;
-int poops = 0;
-
+GameState state;
 bool menuOpened = false;
 bool displayingStats = false;
 int menuSel = 0;
+unsigned long lastSaveTime = 0; // Tracks the last save time
+
 
 void playButtonSound() {
   tone(SOUND_PIN, 1000, 100);
@@ -47,188 +68,198 @@ void capValue(int &value, int increment, int min = 0, int max = 100) {
 }
 
 void playEatingAnimation() {
-  const int animationDelay = 500; // Time in milliseconds to show each frame
+  const int animationDelay = 500;
   
   // Frame 1: Looking at food
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o.o ) >1");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
   // Frame 2: Eating food
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o.o ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  >[ ]<  ");
   display.display();
   delay(animationDelay);
   
   // Frame 3: Happy after eating
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( ^_^ ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
+    // Serial.println("Eating animation played.");
+
 }
 
 void playPlayingAnimation() {
-  const int animationDelay = 500; // Time in milliseconds to show each frame
+  const int animationDelay = 500;
 
   // Frame 1: Looking at the ball
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o.o ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  >o");
   display.display();
   delay(animationDelay);
   
   // Frame 2: Hitting the ball
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( >.< ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ < o ");
   display.display();
   delay(animationDelay);
   
-  // Frame 3: Happy with the ball on the other side
+  // Frame 3: Happy
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( ^_^ ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  o");
   display.display();
   delay(animationDelay);
+    // Serial.println("Play animation played.");
+
 }
 
 void playHealingAnimation() {
-  const int animationDelay = 500; // Time in milliseconds to show each frame
+  const int animationDelay = 500; 
 
   // Frame 1: Sad or sick expression
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( >.< ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
-  // Frame 2: With a bandage and hopeful
+  // Frame 2:
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" (-.-) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
   // Frame 3: Happy and healed
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( ^_^ ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
+    // Serial.println("Healing animation played.");
+
 }
 
 void playSleepingAnimation() {
-  const int animationDelay = 500; // Time in milliseconds to show each frame
+  const int animationDelay = 500;
 
-  // Frame 1: Getting ready to sleep
+  // Frame 1: Getting ready to state.sleep
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( -.- ) zZ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
   // Frame 2: Sleeping soundly
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( -.- ) zZz");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
-  delay(2000); // Hold this frame a bit longer to simulate the Tamagotchi sleeping
+  delay(2000); // Hold this frame a bit longer
   
   // Frame 3: Waking up refreshed
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( ^_^ ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
+    // Serial.println("Sleep animation played.");
+
 }
 
 void playDisciplineAnimation() {
-  const int animationDelay = 500; // Time in milliseconds to show each frame
+  const int animationDelay = 500; 
 
   // Frame 1: Neutral
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o.o ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
   // Frame 2: Sad but attentive
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o_o ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
   
   // Frame 3: Sad
   display.clearDisplay();
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( >_< ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
   display.display();
   delay(animationDelay);
+
+  // Serial.println("Discipline animation played.");
 }
 
 void flushPoops() {
@@ -238,7 +269,6 @@ void flushPoops() {
     
     // Starting from the left side of the screen, draw water rectangles that increase in width
     for (int waterWidth = 0; waterWidth <= display.width(); waterWidth += waterSpeed) {
-        // Clear the area below the menu bar on each frame to redraw the water
         // This keeps the menu bar intact
         display.fillRect(0, menuLineHeight, display.width(), waterHeight, SSD1306_BLACK);
 
@@ -255,21 +285,22 @@ void flushPoops() {
     display.display();
 
     // Reset the poop count after flushing
-    poops = 0;
+    state.poops = 0;
+    // Serial.println("Poops Cleaned. Poops = " + state.poops);
 }
 
 void displayPoops() {
     // Assuming each poop takes up about 10 pixels horizontally and 16 pixels vertically
     int startingPoopPosX = 0; // Starting X position for the first poop
-    int poopPosY = display.height() - 16; // Position Y for poops at the bottom of the screen
-    int poopSpacing = 12; // Space between poops
+    int poopPosY = display.height() - 16; // Position Y for state.poops at the bottom of the screen
+    int poopSpacing = 12; // Space between state.poops
     
-    for (int i = 0; i < poops; i++) {
+    for (int i = 0; i < state.poops; i++) {
         int poopPosX = startingPoopPosX + (i * poopSpacing); // Calculate X position for each poop
 
         // Ensure we don't draw outside the display width
         if (poopPosX + 10 > display.width()) {
-            break; // Stop drawing more poops if we run out of space
+            break; // Stop drawing more state.poops if we run out of space
         }
 
         // Draw poop at calculated position
@@ -278,6 +309,7 @@ void displayPoops() {
         display.setCursor(poopPosX, poopPosY + 8);
         display.println(" (   )");
     }
+   
 }
 
 
@@ -306,33 +338,34 @@ void displayMenuLine(int menuSel) {
     }
   }
   display.println();
+
 }
 
 void displayTamagotchi() {
   // Update horizontal position
-  tamagotchiPosX += moveSpeed * moveDirectionX;
+  state.tamagotchiPosX += moveSpeed * moveDirectionX;
   // Reverse direction if hitting the horizontal display boundaries
-  if (tamagotchiPosX <= 0 || tamagotchiPosX >= display.width() - 64) {
+  if (state.tamagotchiPosX <= 0 || state.tamagotchiPosX >= display.width() - 64) {
     moveDirectionX *= -1;
   }
 
   // Update vertical position
-  tamagotchiPosY += moveSpeed * moveDirectionY;
+  state.tamagotchiPosY += moveSpeed * moveDirectionY;
   // Reverse direction if hitting the vertical display boundaries, taking into account the menu line height
-  if (tamagotchiPosY <= menuLineHeight || tamagotchiPosY >= display.height() - 32) {
+  if (state.tamagotchiPosY <= menuLineHeight || state.tamagotchiPosY >= display.height() - 32) {
     moveDirectionY *= -1;
   }
 
   // Ensure the position stays within the display boundaries, accounting for the menu line height
-  tamagotchiPosX = max(0, min(tamagotchiPosX, display.width() - 64));
-  tamagotchiPosY = max(menuLineHeight, min(tamagotchiPosY, display.height() - 32));
+  state.tamagotchiPosX = max(0, min(state.tamagotchiPosX, display.width() - 64));
+  state.tamagotchiPosY = max(menuLineHeight, min(state.tamagotchiPosY, display.height() - 32));
 
   // Set cursor based on current position and draw the Tamagotchi
-  display.setCursor(tamagotchiPosX, tamagotchiPosY);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY);
   display.println("  /\\_/\\  ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 10);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 10);
   display.println(" ( o.o ) ");
-  display.setCursor(tamagotchiPosX, tamagotchiPosY + 20);
+  display.setCursor(state.tamagotchiPosX, state.tamagotchiPosY + 20);
   display.println("  > ^ <  ");
 }
 
@@ -342,17 +375,17 @@ void displayStats() {
   display.println("Stats:");
   display.println("");
   display.print("Hunger: ");
-  display.println(hunger);
+  display.println(state.hunger);
   display.print("Happy: ");
-  display.println(happy);
+  display.println(state.happy);
   display.print("Health: ");
-  display.println(health);
+  display.println(state.health);
   display.print("Sleep: ");
-  display.println(sleep);
+  display.println(state.sleep);
   display.print("Discipline: ");
-  display.println(discipline);
+  display.println(state.discipline);
   display.print("Poops: ");
-  display.println(poops);
+  display.println(state.poops);
 }
 
 void updateStats() {
@@ -360,43 +393,75 @@ void updateStats() {
   static unsigned long lastUpdateTime = 0; // Last update time
   unsigned long currentTime = millis(); // Current time in milliseconds
   
-  // Update stats every 10 seconds instead of every loop. Adjust the timing as needed for your gameplay balance.
+  // Update stats every 10 seconds instead of every loop.
   if (currentTime - lastUpdateTime > 10000) { // 10,000 milliseconds = 10 seconds
     lastUpdateTime = currentTime; // Reset the last update time
     
     // Now apply the slower stat decreases
-    capValue(hunger, -random(0, 2)); // Decrease hunger by 0 or 1 point
-    if (hunger < 30 || health < 30) {
-      capValue(happy, -1); // Decrease happiness by 1 point if hunger or health is low
+    capValue(state.hunger, -random(0, 2)); // Decrease state.hunger by 0 or 1 point
+    if (state.hunger < 30 || state.health < 30) {
+      capValue(state.happy, -1); // Decrease happiness by 1 point if state.hunger or state.health is low
     }
 
-    if (hunger < 30 || sleep < 30) {
-      capValue(health, -random(0, 2)); // Decrease health by 0 or 1 point if hunger or sleep is low
+    if (state.hunger < 30 || state.sleep < 30) {
+      capValue(state.health, -random(0, 2)); // Decrease state.health by 0 or 1 point if state.hunger or state.sleep is low
     }
 
-    capValue(sleep, -1); // Decrease sleep by 1 point
-    capValue(discipline, -random(0, 1)); // Decrease discipline by 0 or 1 point
+    capValue(state.sleep, -1); // Decrease state.sleep by 1 point
+    capValue(state.discipline, -random(0, 1)); // Decrease state.discipline by 0 or 1 point
     
-    if (random(0, 10) < 2 && hunger > 70) { // Lower chance of "poops" accumulation
-      poops++;
+    if (random(0, 10) < 2 && state.hunger > 70) { // Lower chance of "state.poops" accumulation
+      state.poops++;
     }
   }
 }
 
-void handleMenuSelection(int menuSel) {
+void handleMenuSelection(int menuSel) {  
   // Modify stats based on menu selection
   switch (menuSel) {
-    case 0: capValue(hunger, 20); playEatingAnimation(); break;   // Feed
-    case 1: capValue(happy, 10);  playPlayingAnimation(); break;    // Play
-    case 2: capValue(health, 10); playHealingAnimation(); break;   // Heal
-    case 3: capValue(sleep, 20);  playSleepingAnimation(); break;    // Sleep
-    case 4: capValue(discipline, 10); playDisciplineAnimation(); break; // Discipline
-    case 5: flushPoops(); break; // Flush poops
-    case 6: displayingStats = !displayingStats; break; // Show stats
+    case 0: 
+      capValue(state.hunger, 20);
+      playEatingAnimation();
+      // Serial.print("Hunger decreased to: ");
+      // Serial.println(state.hunger);
+      break;   // Feed
+    case 1: 
+      capValue(state.happy, 10);
+      playPlayingAnimation();
+      // Serial.print("Happiness increased to: ");
+      // Serial.println(state.happy);
+      break;    // Play
+    case 2: 
+      capValue(state.health, 10);
+      playHealingAnimation();
+      // Serial.print("Health increased to: ");
+      // Serial.println(state.health);
+      break;   // Heal
+    case 3: 
+      capValue(state.sleep, 20);
+      playSleepingAnimation();
+      // Serial.print("Sleep increased to: ");
+      // Serial.println(state.sleep);
+      break;    // Sleep
+    case 4: 
+      capValue(state.discipline, 10);
+      playDisciplineAnimation();
+      // Serial.print("Discipline increased to: ");
+      // Serial.println(state.discipline);
+      break; // Discipline
+    case 5: 
+      flushPoops();
+      Serial.println("Poops flushed.");
+      break; // Flush state.poops
+    case 6: 
+      displayingStats = !displayingStats;
+      // Serial.print("Displaying stats: ");
+      // Serial.println(displayingStats ? "ON" : "OFF");
+      break; // Show stats
   }
 }
-
 void setup() {
+  Serial.begin(1200);
   pinMode(BUTTON_A, INPUT_PULLUP);
   pinMode(BUTTON_B, INPUT_PULLUP);
   pinMode(BUTTON_C, INPUT_PULLUP);
@@ -405,6 +470,8 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // Initialize with the I2C addr 0x3C
   display.display();
   delay(2000); // Show initial display buffer
+
+   loadGameState(state); // Load any saved game state.
 
   display.clearDisplay();
   display.setTextSize(1);
@@ -425,6 +492,7 @@ void loop() {
   if (!digitalRead(BUTTON_B)) {
     playButtonSound();
     handleMenuSelection(menuSel);
+    saveGameState(state);
     while (!digitalRead(BUTTON_B));  // Wait for button release
   }
 
@@ -447,6 +515,13 @@ void loop() {
 
   updateStats();
   displayPoops();
+
+  unsigned long currentTime = millis();
+  if (currentTime - lastSaveTime >= 300000) { // Check if 5 minutes have passed
+    saveGameState(state); // Save the game state
+    lastSaveTime = currentTime; // Update the last save time
+  }
+
   display.display();  // Draw everything on the screen
   delay(100);         // Small delay to reduce flickering
 }
